@@ -2,50 +2,56 @@
 package main
 
 import (
-	"crypto/tls"
-	"io"
+	"bufio"
 	"log"
 	"net"
+	"net/http"
 )
 
 type Server struct {
-	Addr       string
-	Proxy      string
-	CertFile   string
-	KeyFile    string
-	BufferSize int
+	Addr     string
+	Proxy    string
+	CertFile string
+	KeyFile  string
 }
 
-func NewServer(addr string, bufSize int, certFile string, keyFile string, proxy string) *Server {
+func NewServer(addr string, certFile string, keyFile string, proxy string) *Server {
 	return &Server{
-		Addr:       addr,
-		CertFile:   certFile,
-		KeyFile:    keyFile,
-		BufferSize: bufSize,
-		Proxy:      proxy,
+		Addr:     addr,
+		CertFile: certFile,
+		KeyFile:  keyFile,
+		Proxy:    proxy,
 	}
 }
 
 func (s *Server) Start() {
-	cert, err := tls.LoadX509KeyPair(s.CertFile, s.KeyFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	config := &tls.Config{Certificates: []tls.Certificate{cert}}
-	l, err := tls.Listen("tcp", s.Addr, config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer l.Close()
+	log.Fatal(listenAndServeTLS(s.Addr, s.CertFile, s.KeyFile, s.handleConnection))
+}
 
-	for {
-		conn, err := l.Accept()
+func (this *Server) handleConnection(c net.Conn) {
+	req, err := http.ReadRequest(bufio.NewReader(c))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	// secure connection
+	if req.Method == "CONNECT" {
+		s, err := connect(req.URL.Host, this.Proxy, false)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			return
+		}
+		defer s.Close()
+
+		w := bufio.NewWriter(c)
+		w.WriteString("HTTP/1.1 200 Connection established\r\n")
+		w.WriteString("Proxy-agent: gost/1.0\r\n\r\n")
+		if err := w.Flush(); err != nil {
+			log.Println(err)
+			return
 		}
 
-		go func(c net.Conn) {
-			io.Copy(c, c)
-		}(conn)
+		transfer(c, s)
 	}
 }
