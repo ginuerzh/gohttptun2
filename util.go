@@ -8,7 +8,8 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
+	//"net/http"
+	"strings"
 )
 
 type HandlerFunc func(net.Conn)
@@ -64,7 +65,7 @@ func listenAndServeTLS(addr string, certFile, keyFile string, handler HandlerFun
 }
 
 func connect(addr string, proxy string, secure bool) (conn net.Conn, err error) {
-	//log.Println("CONNECT", addr, "proxy", proxy, "secure", secure)
+	log.Println("CONNECT", addr, "proxy", proxy, "secure", secure)
 	if len(proxy) > 0 {
 		conn, err = net.Dial("tcp", proxy)
 		if err != nil {
@@ -79,17 +80,25 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, err error) 
 			return nil, err
 		}
 		//log.Println("write ok")
-		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-		if err != nil {
-			conn.Close()
-			return nil, err
-		}
-		defer resp.Body.Close()
+		/*
+			resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+			if err != nil {
+				conn.Close()
+				return nil, err
+			}
+			defer resp.Body.Close()
 
-		//log.Println(resp.Status)
-		if resp.StatusCode != http.StatusOK {
+			//log.Println(resp.Status)
+			if resp.StatusCode != http.StatusOK {
+				conn.Close()
+				return nil, errors.New(resp.Status)
+			}
+		*/
+		r := bufio.NewReader(conn)
+		status, _ := r.ReadString('\n')
+		if !strings.Contains(status, "200") {
 			conn.Close()
-			return nil, errors.New(resp.Status)
+			return nil, errors.New(status)
 		}
 	} else {
 		conn, err = net.Dial("tcp", addr)
@@ -109,7 +118,7 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, err error) 
 		conn = cli
 	}
 
-	//log.Println("CONNECT", addr, "OK")
+	log.Println("CONNECT", addr, "OK")
 	return conn, nil
 }
 
