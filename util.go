@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net"
-	//"net/http"
 	"strings"
 )
 
@@ -79,24 +78,23 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, status stri
 			return
 		}
 
-		r := bufio.NewReader(conn)
-		status, err = r.ReadString('\n')
-		s, _ := r.ReadString('\n')
-		status += s
+		var b []byte
+		b, err = read(conn)
 		if err != nil {
 			return
 		}
+		status = string(b)
 		if !strings.Contains(status, "200") {
 			err = errors.New(status)
 			return
 		}
+		//log.Println(status)
 		//log.Println("CONNECT", addr, proxy, "OK")
 	} else {
 		conn, err = net.Dial("tcp", addr)
 		if err != nil {
 			return
 		}
-		status = "HTTP/1.1 200 Connection established\r\n\r\n"
 	}
 
 	if secure {
@@ -106,34 +104,30 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, status stri
 		conn = cli
 	}
 
+	status = "HTTP/1.0 200 Connection established\r\n" +
+		"Proxy-Agent: gost/1.0\r\n\r\n"
 	return
 }
 
 func transfer(src, dst net.Conn) {
 	log.Println("start transfer")
-	statusChan := make(chan int, 1)
+	//statusChan := make(chan int, 1)
 
 	go func(r io.Reader, w io.Writer) {
 		readWrite(r, w)
-		statusChan <- 1
-	}(src, dst)
+	}(dst, src)
 
-	readWrite(dst, src)
-	<-statusChan
+	readWrite(src, dst)
 
 	log.Println("transfer done")
 }
 
 func readWrite(r io.Reader, w io.Writer) (err error) {
-	n := 0
-	b := make([]byte, config.BufferSize)
-
+	var b []byte
 	for {
-		//log.Println("read...")
-		n, err = r.Read(b)
-		//log.Println("r", n)
-		if n > 0 {
-			if _, err := w.Write(b[:n]); err != nil {
+		b, err = read(r)
+		if len(b) > 0 {
+			if _, err := w.Write(b); err != nil {
 				return err
 			}
 		}
@@ -146,4 +140,10 @@ func readWrite(r io.Reader, w io.Writer) (err error) {
 	}
 
 	return
+}
+
+func read(r io.Reader) ([]byte, error) {
+	b := make([]byte, config.BufferSize)
+	n, err := r.Read(b)
+	return b[:n], err
 }
