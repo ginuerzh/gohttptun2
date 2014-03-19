@@ -7,13 +7,13 @@ import (
 )
 
 type Config struct {
-	Addr     string
-	Server   string
-	Proxy    string
-	CertFile string
-	KeyFile  string
-	IsClient bool
-	//BufferSize int
+	Addr       string
+	Server     string
+	Proxy      string
+	CertFile   string
+	KeyFile    string
+	IsClient   bool
+	BufferSize int
 }
 
 var config Config
@@ -25,7 +25,7 @@ func init() {
 	flag.StringVar(&config.CertFile, "cert", "cert.pem", "cert.pem file")
 	flag.StringVar(&config.KeyFile, "key", "key.pem", "key.pem file")
 	flag.BoolVar(&config.IsClient, "c", false, "client")
-	//flag.IntVar(&config.BufferSize, "b", 8192, "buffer size")
+	flag.IntVar(&config.BufferSize, "b", 4096, "buffer size")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)

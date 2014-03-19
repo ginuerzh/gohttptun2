@@ -64,8 +64,8 @@ func listenAndServeTLS(addr string, certFile, keyFile string, handler HandlerFun
 	return nil
 }
 
-func connect(addr string, proxy string, secure bool) (conn net.Conn, err error) {
-	log.Println("CONNECT", addr, "proxy", proxy, "secure", secure)
+func connect(addr string, proxy string, secure bool) (conn net.Conn, status string, err error) {
+	//log.Println("connect", addr, "proxy", proxy, "secure", secure)
 	if len(proxy) > 0 {
 		conn, err = net.Dial("tcp", proxy)
 		if err != nil {
@@ -75,104 +75,75 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, err error) 
 		w.WriteString("CONNECT " + addr + " HTTP/1.1\r\n")
 		w.WriteString("Host: " + addr + "\r\n")
 		w.WriteString("Proxy-Connection: keep-alive\r\n\r\n")
-
-		if err := w.Flush(); err != nil {
-			return nil, err
+		if err = w.Flush(); err != nil {
+			return
 		}
-		//log.Println("write ok")
-		/*
-			resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-			if err != nil {
-				conn.Close()
-				return nil, err
-			}
-			defer resp.Body.Close()
 
-			//log.Println(resp.Status)
-			if resp.StatusCode != http.StatusOK {
-				conn.Close()
-				return nil, errors.New(resp.Status)
-			}
-		*/
 		r := bufio.NewReader(conn)
-		status, _ := r.ReadString('\n')
-		if !strings.Contains(status, "200") {
-			conn.Close()
-			return nil, errors.New(status)
+		status, err = r.ReadString('\n')
+		s, _ := r.ReadString('\n')
+		status += s
+		if err != nil {
+			return
 		}
+		if !strings.Contains(status, "200") {
+			err = errors.New(status)
+			return
+		}
+		//log.Println("CONNECT", addr, proxy, "OK")
 	} else {
 		conn, err = net.Dial("tcp", addr)
 		if err != nil {
 			return
 		}
+		status = "HTTP/1.1 200 Connection established\r\n\r\n"
 	}
 
 	if secure {
 		config := &tls.Config{InsecureSkipVerify: true}
 		cli := tls.Client(conn, config)
-		if err := cli.Handshake(); err != nil {
-			cli.Close()
-			return nil, err
-		}
-		//log.Println("hand shake done")
+		err = cli.Handshake()
 		conn = cli
 	}
 
-	log.Println("CONNECT", addr, "OK")
-	return conn, nil
+	return
 }
 
 func transfer(src, dst net.Conn) {
-	//log.Println("start transfer")
+	log.Println("start transfer")
 	statusChan := make(chan int, 1)
 
 	go func(r io.Reader, w io.Writer) {
-		for {
-			/*
-				b := make([]byte, 1460)
-				n, err := r.Read(b)
-				if err != nil {
-					log.Println(err)
-					break
-				}
-				log.Println("r", n)
-				_, err = w.Write(b[:n])
-				if err != nil {
-					log.Println(err)
-					break
-				}
-			*/
-			_, err := io.Copy(w, r)
-			if err != nil {
-				log.Println(err)
-				break
-			}
-		}
-
+		readWrite(r, w)
 		statusChan <- 1
 	}(src, dst)
 
+	readWrite(dst, src)
+	<-statusChan
+
+	log.Println("transfer done")
+}
+
+func readWrite(r io.Reader, w io.Writer) (err error) {
+	n := 0
+	b := make([]byte, config.BufferSize)
+
 	for {
-		/*
-			b := make([]byte, 1460)
-			n, err := dst.Read(b)
-			if err != nil {
-				log.Println(err)
-				break
+		//log.Println("read...")
+		n, err = r.Read(b)
+		//log.Println("r", n)
+		if n > 0 {
+			if _, err := w.Write(b[:n]); err != nil {
+				return err
 			}
-			log.Println("r", n)
-			_, err = src.Write(b[:n])
-			if err != nil {
-				log.Println(err)
-				break
-			}
-		*/
-		_, err := io.Copy(src, dst)
+		}
 		if err != nil {
-			log.Println(err)
+			if err != io.EOF {
+				log.Println(err)
+			}
 			break
 		}
 	}
 
-	<-statusChan
+	return
 }

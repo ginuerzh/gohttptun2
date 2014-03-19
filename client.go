@@ -25,12 +25,14 @@ func (c *Client) Start() {
 }
 
 func (c *Client) handleConnection(conn net.Conn) {
-	s, err := connect(c.Server, c.Proxy, true)
+	s, _, err := connect(c.Server, c.Proxy, true)
+	if s != nil {
+		defer s.Close()
+	}
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	defer s.Close()
 
 	transfer(conn, s)
 }

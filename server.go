@@ -37,17 +37,18 @@ func (this *Server) handleConnection(c net.Conn) {
 
 	// secure connection
 	if req.Method == "CONNECT" {
-		s, err := connect(req.URL.Host, this.Proxy, false)
-		if err != nil {
-			log.Println(err)
-			return
+		s, status, err := connect(req.URL.Host, this.Proxy, false)
+		log.Println("CONNECT", req.URL.Host, status)
+		if s != nil {
+			defer s.Close()
 		}
-		defer s.Close()
-
-		w := bufio.NewWriter(c)
-		w.WriteString("HTTP/1.1 200 Connection established\r\n")
-		w.WriteString("Proxy-agent: gost/1.0\r\n\r\n")
-		if err := w.Flush(); err != nil {
+		if len(status) > 0 {
+			//log.Println(status)
+			w := bufio.NewWriter(c)
+			w.WriteString(status)
+			err = w.Flush()
+		}
+		if err != nil {
 			log.Println(err)
 			return
 		}
