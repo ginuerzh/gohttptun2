@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"io"
-	"log"
+	//"log"
 	"net"
 	"strings"
 )
@@ -110,7 +110,7 @@ func connect(addr string, proxy string, secure bool) (conn net.Conn, status stri
 }
 
 func transfer(src, dst net.Conn) {
-	log.Println("start transfer")
+	//log.Println("start transfer")
 	//statusChan := make(chan int, 1)
 
 	go func(r io.Reader, w io.Writer) {
@@ -119,7 +119,7 @@ func transfer(src, dst net.Conn) {
 
 	readWrite(src, dst)
 
-	log.Println("transfer done")
+	//log.Println("transfer done")
 }
 
 func readWrite(r io.Reader, w io.Writer) (err error) {
@@ -133,7 +133,7 @@ func readWrite(r io.Reader, w io.Writer) (err error) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				log.Println(err)
+				//log.Println(err)
 			}
 			break
 		}
